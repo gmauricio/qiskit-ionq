@@ -63,16 +63,10 @@ class JobStatusMap(enum.Enum):
     FAILED = jobstatus.JobStatus.ERROR.name
 
 
-class AggregationType(enum.Enum):
-    """Class for job results aggregation enumerated type."""
-
-    AVERAGE = 'average'
-    PLURALITY = 'plurality'
-
-
 class ErrorMitigation(enum.Enum):
     """Class for error mitigation settings enumerated type."""
 
+    DEFAULT = {}
     SYMMETRIZATION = {"symmetrization": True}
     NO_SYMMETRIZATION = {"symmetrization": False}
 
