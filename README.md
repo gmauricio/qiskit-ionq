@@ -74,7 +74,6 @@ For example, running a Bell State:
 
 ```python
 from qiskit import QuantumCircuit
-from qiskit_ionq.constants import AggregationType
 
 # Create a basic Bell State circuit:
 qc = QuantumCircuit(2, 2)
@@ -90,7 +89,7 @@ print(job.result().get_counts())
 
 # Get results with a different aggregation method when symmetrization
 # is applied as an error mitigation strategy
-print(job.result(AggregationType.AVERAGE).get_counts())
+print(job.result(aggregation='plurality').get_counts())
 
 # The simulator specifically provides the the ideal probabilities and creates
 # counts by sampling from these probabilities. The raw probabilities are also accessible:

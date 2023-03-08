@@ -41,7 +41,6 @@ import numpy as np
 from qiskit.providers import JobV1, jobstatus
 from qiskit.providers.exceptions import JobTimeoutError
 from .ionq_result import IonQResult as Result
-from .constants import AggregationType
 from .helpers import decompress_metadata_string_to_dict
 
 
@@ -64,7 +63,8 @@ def map_output(data, clbits, num_qubits):
     for value, probability in data.items():
         bitstring = bin(int(value))[2:].rjust(num_qubits, "0")[::-1]
 
-        bitvalue = int(''.join([get_bitvalue(bitstring, bit) for bit in clbits])[::-1], 2)
+        bitvalue = int(''.join([get_bitvalue(bitstring, bit)
+                       for bit in clbits])[::-1], 2)
 
         acc_prob = mapped_output.get(bitvalue) or 0
         mapped_output[bitvalue] = acc_prob + probability
@@ -164,7 +164,8 @@ class IonQJob(JobV1):
     def __init__(self, backend, job_id, client=None, circuit=None, passed_args=None):
         super().__init__(backend, job_id)
         self._client = client or backend.client
-        self._passed_args = passed_args or {"shots": 1024, "sampler_seed": None}
+        self._passed_args = passed_args or {
+            "shots": 1024, "sampler_seed": None}
         self._result = None
         self._status = None
         self._execution_time = None
@@ -234,7 +235,7 @@ class IonQJob(JobV1):
         """
         return self.result().get_probabilities()
 
-    def result(self, aggregation: AggregationType = None):
+    def result(self, aggregation=None):
         """Retrieve job result data.
 
         .. NOTE::
@@ -258,9 +259,6 @@ class IonQJob(JobV1):
         """
         # TODO: cache results by aggregation type
 
-        if aggregation is not None and not isinstance(aggregation, AggregationType):
-            raise exceptions.IonQJobError("Invalid aggregation type")
-
         # Wait for the job to complete.
         try:
             self.wait_for_final_state()
@@ -270,8 +268,7 @@ class IonQJob(JobV1):
             ) from ex
 
         if self._status is jobstatus.JobStatus.DONE:
-            agg_type = aggregation.value if aggregation else None
-            response = self._client.get_results(self._job_id, agg_type)
+            response = self._client.get_results(self._job_id, aggregation)
             self._result = self._format_result(response)
 
         return self._result
@@ -328,7 +325,8 @@ class IonQJob(JobV1):
         if self._status == jobstatus.JobStatus.DONE:
             self._num_qubits = response.get("qubits")
             default_map = list(range(self._num_qubits))
-            self._clbits = (response.get("registers") or {}).get("meas_mapped", default_map)
+            self._clbits = (response.get("registers") or {}
+                            ).get("meas_mapped", default_map)
             self._execution_time = response.get("execution_time") / 1000
 
         if self._status == jobstatus.JobStatus.ERROR:
