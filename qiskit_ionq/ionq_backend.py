@@ -27,9 +27,9 @@
 """IonQ provider backends."""
 
 import abc
+from datetime import datetime
 import warnings
 
-import dateutil.parser
 from qiskit.providers import BackendV1 as Backend
 from qiskit.providers.models import BackendConfiguration
 from qiskit.providers.models.backendstatus import BackendStatus
@@ -50,6 +50,15 @@ class Calibration:
         self._data = data
 
     @property
+    def uuid(self):
+        """The ID of the calibration.
+
+        Returns:
+           str: The ID.
+        """
+        return self._data["id"]
+
+    @property
     def num_qubits(self):
         """The number of qubits available.
 
@@ -65,7 +74,7 @@ class Calibration:
         Returns:
             str: The name of the target hardware backend.
         """
-        return self._data["target"]
+        return self._data["backend"]
 
     @property
     def calibration_time(self):
@@ -74,7 +83,7 @@ class Calibration:
         Returns:
             datetime.datetime: A datetime object with the time.
         """
-        return dateutil.parser.isoparse(self._data["date"])
+        return datetime.fromtimestamp(self._data["date"])
 
     @property
     def fidelities(self):
@@ -125,7 +134,7 @@ class IonQBackend(Backend):
 
     @classmethod
     def _default_options(cls):
-        return Options(shots=1024, job_settings=None)
+        return Options(shots=1024, job_settings=None, error_mitigation=None)
 
     @property
     def client(self):
@@ -171,7 +180,8 @@ class IonQBackend(Backend):
             ) from ex
 
         if url is None:
-            raise exceptions.IonQCredentialsError("Credentials `url` may not be None!")
+            raise exceptions.IonQCredentialsError(
+                "Credentials `url` may not be None!")
 
         return ionq_client.IonQClient(token, url, self._provider.custom_headers)
 
@@ -199,6 +209,13 @@ class IonQBackend(Backend):
             if len(circuit) > 1:
                 raise RuntimeError("Multi-experiment jobs are not supported!")
             circuit = circuit[0]
+
+        if not self.has_valid_mapping(circuit):
+            warnings.warn(
+                f"Circuit {circuit.name} is not measuring any qubits",
+                UserWarning,
+                stacklevel=2,
+            )
 
         for kwarg in kwargs:
             if not hasattr(self.options, kwarg):
@@ -235,6 +252,24 @@ class IonQBackend(Backend):
         """get a list of jobs from a specific backend, job id"""
 
         return [ionq_job.IonQJob(self, job_id, self.client) for job_id in job_ids]
+
+    def has_valid_mapping(self, circuit) -> bool:
+        """checks if the circuit has at least one
+        valid qubit -> bit measurement.
+
+        Args:
+            circuit (:class:`QuantumCircuit <qiskit.circuit.QuantumCircuit>`):
+                A Qiskit QuantumCircuit object.
+
+        Returns:
+            boolean: if the circuit has valid mappings
+        """
+        # Check if a qubit is measured
+        for instruction, _, cargs in circuit.data:
+            if instruction.name == "measure" and len(cargs):
+                return True
+        # If no mappings are found, return False
+        return False
 
     # TODO: Implement backend status checks.
     def status(self):
@@ -347,7 +382,8 @@ class IonQSimulatorBackend(IonQBackend):
                 "description": "IonQ simulator",
                 "basis_gates": GATESET_MAP[gateset],
                 "memory": False,
-                "n_qubits": 29,
+                # Varied based on noise model, but enforced server-side.
+                "n_qubits": 32,
                 "conditional": False,
                 "max_shots": 1,
                 "max_experiments": 1,
@@ -383,7 +419,7 @@ class IonQQPUBackend(IonQBackend):
                 # This is a generic backend for all IonQ hardware, the server will do more specific
                 # qubit count checks. In the future, dynamic backend configuration from the server
                 # will be used in place of these hard-coded caps.
-                "n_qubits": 23,
+                "n_qubits": 32,
                 "conditional": False,
                 "max_shots": 10000,
                 "max_experiments": 1,

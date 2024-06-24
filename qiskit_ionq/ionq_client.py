@@ -39,7 +39,7 @@ class IonQClient:
     """IonQ API Client
 
     Attributes:
-        _url(str): A URL base to use for API calls, e.g. ``"https://api.ionq.co/v0.1"``
+        _url(str): A URL base to use for API calls, e.g. ``"https://api.ionq.co/v0.3"``
         _token(str): An API Access Token to use with the IonQ API.
         _custom_headers(dict): Extra headers to add to the request.
     """
@@ -153,7 +153,7 @@ class IonQClient:
         """
         req_path = self.make_path("jobs", job_id)
         res = requests.delete(req_path, headers=self.api_headers, timeout=30)
-        exceptions.IonQAPIError.raise_for_status(requests)
+        exceptions.IonQAPIError.raise_for_status(res)
         return res.json()
 
     @retry(exceptions=IonQRetriableError, max_delay=60, backoff=2, jitter=1)
@@ -166,46 +166,62 @@ class IonQClient:
         Calibration::
 
             {
-                "pages": <int>,
-                "calibrations": [
-                    {
-                        "id": <str>,
-                        "date": <int>,
-                        "target": <str>,
-                        "qubits": <int>,
-                        "connectivity": [<int>, ...],
-                        "fidelity": {
-                            "spam": {
-                                "mean": <int>,
-                                "stderr": <int>
-                            }
-                        },
-                        "timing": {
-                            "readout": <int>,
-                            "reset": <int>
-                        }
+                "id": <str>,
+                "calibration_time": <int>,
+                "target": <str>,
+                "num_qubits": <int>,
+                "connectivity": [<int>, ...],
+                "fidelity": {
+                    "spam": {
+                        "mean": <int>,
+                        "stderr": <int>
                     }
-                ]
+                },
+                "timing": {
+                    "readout": <int>,
+                    "reset": <int>
+                }
             }
 
         Returns:
             dict: A dictionary of an IonQ backend's calibration data.
         """
-        req_path = self.make_path("calibrations")
+        req_path = self.make_path("/".join([
+            "characterizations/backends",
+            backend_name[5:],
+            "current"
+        ]))
         res = requests.get(req_path, headers=self.api_headers, timeout=30)
-        exceptions.IonQAPIError.raise_for_status(requests)
+        exceptions.IonQAPIError.raise_for_status(res)
 
-        # Get calibrations and filter down to the target
-        response = res.json()
-        calibrations = response.get("calibrations") or []
-        calibrations = [c for c in calibrations if c.get("target") == backend_name]
+        return res.json()
 
-        # If nothing was found, just return None.
-        if len(calibrations) == 0:
-            return None
+    @retry(exceptions=IonQRetriableError, max_delay=60, backoff=2, jitter=1)
+    def get_results(self, job_id: str, aggregation=None):
+        """Retrieve job results from the IonQ API.
 
-        # Calibrations are in most recent order in the response, so get the first.
-        return calibrations[0]
+        The returned JSON dict will only have data if job has completed.
+
+        Args:
+            job_id (str): The ID of a job to retrieve.
+            aggregation (str): type of results aggregation
+
+        Raises:
+            IonQAPIError: When the API returns a non-200 status code.
+
+        Returns:
+            dict: A :mod:`requests <requests>` response :meth:`json <requests.Response.json>` dict.
+        """
+
+        params = {}
+
+        if aggregation:
+            params["aggregation"] = aggregation
+
+        req_path = self.make_path("jobs", job_id, "results")
+        res = requests.get(req_path, params, headers=self.api_headers, timeout=30)
+        exceptions.IonQAPIError.raise_for_status(res)
+        return res.json()
 
 
 __all__ = ["IonQClient"]
